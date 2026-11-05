@@ -1,111 +1,101 @@
-# Audio Speech Emotion Classification — Competition Brief
+# AudiEmot: Speech Emotion Classification
 
-> Source: https://www.kaggle.com/competitions/audio-speech-emotion-classification
-> Captured: 29 Oct 2026. Details below are a faithful restatement of the competition pages (Overview, Data, Rules), not a verbatim copy.
+Recognising emotion from the sound of a voice, using hand-built audio features and classical machine learning.
 
-## At a glance
+![Python 3.15](https://img.shields.io/badge/Python-3.15-3776AB?logo=python&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-1.9-F7931E?logo=scikit-learn&logoColor=white)
+![librosa](https://img.shields.io/badge/librosa-1.0-4B8BBE)
+![Kaggle](https://img.shields.io/badge/Kaggle-first%20submission%20made-20BEFF?logo=kaggle&logoColor=white)
 
-| Field | Value |
+![Spectrograms of one actor saying the same sentence in a neutral and an angry voice](assets/spectrogram_neutral_vs_angry.png)
+
+*The same actor saying the same sentence. Brightness shows energy at each frequency over time (seconds), and the cyan line tracks the pitch of the voice. The angry take is higher pitched, with more energy in the upper frequencies. The blank area is where the shorter clip has ended.*
+
+## The competition
+
+[Audio Speech Emotion Classification](https://www.kaggle.com/competitions/audio-speech-emotion-classification) is a Kaggle course competition. The task is to label 201 short speech clips with one of seven emotions: angry, disgust, fear, happy, neutral, sad or surprised. Entries are scored on mean F1. Training data isn't provided, so models are built from two public datasets:
+
+| Dataset | Clips | Speakers | Spoken text |
+|---|---|---|---|
+| [RAVDESS](https://zenodo.org/records/1188976) | 1,440 | 24 actors | 2 sentences |
+| [TESS](https://www.kaggle.com/datasets/ejlok1/toronto-emotional-speech-set-tess) | 2,800 | 2 actresses | "Say the word ___" with 200 words |
+
+## Results so far
+
+The best single model is an **SVM with an RBF kernel**, at **0.858 macro F1** in cross-validation.
+
+![Macro F1 per model, showing every model scoring far lower on RAVDESS than on TESS](assets/model_comparison.png)
+
+| Model (tuned) | Macro F1 | RAVDESS | TESS |
+|---|---|---|---|
+| **SVM (RBF)** | **0.858** | **0.538** | 0.995 |
+| Logistic regression | 0.836 | 0.500 | 0.981 |
+| Random forest | 0.832 | 0.441 | 0.997 |
+| k-NN | 0.819 | 0.414 | 0.995 |
+| Decision tree | 0.738 | 0.306 | 0.921 |
+
+**RAVDESS is the number to watch.** Its validation folds use actors the model has never heard, while TESS has only two speakers, so they appear in both training and validation. The 0.538 is the better guide to how the model handles a new voice. The headline 0.858 is lifted by TESS, which makes up 69% of the scored clips.
+
+## How it was built
+
+```mermaid
+flowchart LR
+    A["Raw audio<br/>RAVDESS + TESS"] --> B["Metadata<br/>one table of clips"]
+    B --> C["Exploration<br/>listen and measure"]
+    C --> D["Features<br/>256 per clip"]
+    D --> E["Grouped validation<br/>5 folds"]
+    E --> F["Five classifiers<br/>tuned and compared"]
+    F --> G["Kaggle submission"]
+```
+
+**Phase 0: Setup.** Created the environment and downloaded the data. Both training downloads contained a duplicate copy of the dataset, which checksums confirmed were identical, so only one copy is used.
+
+**Phase 1: Metadata** ([`build_metadata.py`](src/build_metadata.py)). Built one table of all 4,240 training clips from their file and folder names, then mapped both datasets onto the seven competition labels. RAVDESS's extra "calm" emotion has no competition label, so it's excluded from training.
+
+**Phase 2: Exploration** ([notebook](notebooks/02_explore.ipynb)). Listened to clips and measured every file. Two findings shaped everything after:
+- The 80 test clips at 16 kHz match RAVDESS on length, silence and background noise, so the test set appears to be about 60% TESS and 40% RAVDESS.
+- Silence looked like a sign of neutral speech, but only because most neutral clips come from TESS, whose clips have almost no silence. Anything that identifies the dataset can mislead a model.
+
+**Phase 3: Features** ([`features.py`](src/features.py)). Converted every clip to mono at 16 kHz, trimmed the silence and normalised the loudness. Each clip was then summarised as fixed-length numbers describing tone (MFCCs), brightness, noisiness, loudness over time and pitch.
+
+**Phase 4: Validation** ([`validation.py`](src/validation.py), [notebook](notebooks/04_validation.ipynb)). Built one scoring method for every model. A random split would put the same actor in training and validation and inflate the score, so folds are grouped by actor for RAVDESS and by word for TESS. Tests on the calm clips, recorded loudness and clip length showed no measurable gain, so all three were left out as the simpler and safer choice.
+
+**Phase 5: Classifiers** ([notebook](notebooks/05_classifiers.ipynb)). Compared and tuned five model families, then retrained the best on all the data and made a first [Kaggle submission](submissions/audiemo_phase5_svm_rbf.csv). The main lessons:
+- **Scaling matters for models that compare distances.** Without it, the SVM falls from 0.854 to 0.234 and k-NN from 0.803 to 0.527, while the random forest doesn't change.
+- **Deeper trees overfit** (below, left). Training score reaches 1.0, but validation score stops improving at around depth 8.
+- **Tuning added little.** Only k-NN's gain was larger than the variation between folds, and only just.
+
+| Overfitting in a decision tree | SVM confusion matrix |
 |---|---|
-| Title | Audio speech emotion classification |
-| Subtitle | CDS-B1 Module 4 Mini Project-4 |
-| Host | CDS Support |
-| Type | Community Prediction Competition (course assignment) |
-| Start | 15 Jun 2021 |
-| Close | 21 Jun 2021 |
-| Current status | Closed; late submissions accepted |
-| Prizes | Kudos only — no points or medals |
-| Participation | 77 entrants, 64 participants, 11 teams, 172 submissions |
-| Tags | Custom Metric |
+| ![Decision tree training score rising to 1.0 while validation score levels off near 0.74](assets/tree_depth_bias_variance.png) | ![SVM confusion matrix with most predictions on the diagonal](assets/svm_confusion_matrix.png) |
 
-## Problem statement
+The matrix on the right pools both datasets, so TESS's near-perfect scores flatter it. Its largest single confusion is happy mistaken for fear (0.06).
 
-Build a model that recognises emotion from speech, using **ensemble learning**.
+## What's next
 
-Workflow described by the host:
-1. Follow the instructions in the course notebook (not hosted on Kaggle).
-2. Download the test data from the competition.
-3. Generate predictions and submit them as a `submission.csv` file, following the host's Kaggle submission guide.
-4. Once submitted, the mean F-score appears on the leaderboard.
+Phase 6 combines models into ensembles, which is the competition's stated goal. After that come error analysis and a test on a newly recorded voice. The [roadmap](ROADMAP.md) has the full plan and the detailed findings from each phase.
 
-## Learning objectives
+## Run it yourself
 
-- Extract features from audio data.
-- Implement ML classification algorithms both individually and as ensembles to classify emotions.
-- Record your own voice sample and test it against the trained model.
+Requires Python 3.15 and a [Kaggle API token](https://www.kaggle.com/settings). Accept the competition rules on Kaggle first, then download the data as below. The test zip already contains a nested folder, which the code expects.
 
-## Evaluation
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-Kaggle scores predictions against the ground truth using **Mean F1-Score**.
+mkdir -p data/raw/kaggle_test data/raw/ravdess data/raw/tess
+kaggle competitions download -c audio-speech-emotion-classification -p data/raw/kaggle_test
+unzip -q data/raw/kaggle_test/*.zip -d data/raw/kaggle_test
+kaggle datasets download -d uwrfkaggler/ravdess-emotional-speech-audio -p data/raw/ravdess --unzip
+kaggle datasets download -d ejlok1/toronto-emotional-speech-set-tess -p data/raw/tess --unzip
 
-- Precision: $p = \dfrac{tp}{tp + fp}$
-- Recall: $r = \dfrac{tp}{tp + fn}$
-- F1: $F1 = 2 \cdot \dfrac{p \cdot r}{p + r}$
+python src/build_metadata.py
+python src/features.py
+```
 
-F1 weights precision and recall equally, so balanced performance on both is favoured over excelling at one and failing at the other.
+Then run the notebooks in [`notebooks/`](notebooks/) in numerical order.
 
-*Note:* the page does not state whether the averaging is macro or weighted.
+## Data credits
 
-## Data
-
-### Training sources (not hosted on Kaggle — obtain separately)
-
-**TESS — Toronto Emotional Speech Set**
-- 2,880 files.
-- 200 target words, each spoken in the carrier phrase "Say the word ___".
-- Two actresses, native English speakers, university educated, with musical training and normal-range hearing thresholds.
-- 7 emotions: anger, disgust, fear, happiness, pleasant surprise, sadness, neutral.
-
-**RAVDESS — Ryerson Audio-Visual Database of Emotional Speech and Song**
-- 1,440 files (24 actors × 60 trials).
-- 24 professional actors: 12 female, 12 male.
-- Two lexically matched statements, neutral North American accent.
-- Emotions: neutral, calm, happy, sad, angry, fearful, surprise, disgust.
-- Each emotion at two intensities (normal, strong), except neutral (normal only).
-
-### RAVDESS filename convention
-
-Each filename is a 7-part numeric identifier, e.g. `03-01-06-01-02-01-12.wav`.
-
-| Position | Field | Codes |
-|---|---|---|
-| 1 | Modality | 01 = full-AV, 02 = video-only, 03 = audio-only |
-| 2 | Vocal channel | 01 = speech, 02 = song |
-| 3 | Emotion | 01 = neutral, 02 = calm, 03 = happy, 04 = sad, 05 = angry, 06 = fearful, 07 = disgust, 08 = surprised |
-| 4 | Intensity | 01 = normal, 02 = strong (no strong for neutral) |
-| 5 | Statement | 01 = "Kids are talking by the door", 02 = "Dogs are sitting by the door" |
-| 6 | Repetition | 01 = 1st, 02 = 2nd |
-| 7 | Actor | 01–24; odd = male, even = female |
-
-Worked example — `03-01-06-01-02-01-12.wav`: audio-only, speech, fearful, normal intensity, "dogs" statement, 1st repetition, actor 12 (female).
-
-### Files provided on Kaggle
-
-| Item | Details |
-|---|---|
-| Total | 202 files, ~21.57 MB (wav, csv) |
-| `MP4_Kaggle_Testset/` | 201 `.wav` test clips named by number (e.g. `7.wav`, `115.wav`); despite the folder name, audio only. Mix of RAVDESS and TESS clips (per data version notes). |
-| `Sample_Submission.csv` | 2.05 kB; 201 rows + header; shows required format and header |
-| Licence | Subject to competition rules |
-
-Access to file previews and downloads requires signing in and accepting the competition rules.
-
-## Submission format
-
-File: `submission.csv`
-
-| Column | Type | Meaning |
-|---|---|---|
-| `Id` | ID | Test clip number |
-| `Label` | String | Predicted emotion |
-
-- One row per test clip → 201 rows plus header.
-- Exact label spellings must match those in `Sample_Submission.csv` (viewable after accepting the rules).
-
-## Rules
-
-The Rules page contains only Kaggle's default placeholder text (no cheating, apply yourself, have fun). No team-size, daily-submission or external-data limits are stated.
-
-## Citation
-
-CDS Support. *Audio speech emotion classification.* https://www.kaggle.com/competitions/audio-speech-emotion-classification, 2021. Kaggle.
+- **RAVDESS:** Livingstone, S. R., & Russo, F. A. (2018). *The Ryerson Audio-Visual Database of Emotional Speech and Song.* PLoS ONE 13(5).
+- **TESS:** Dupuis, K., & Pichora-Fuller, M. K. (2010). *Toronto Emotional Speech Set.* University of Toronto.

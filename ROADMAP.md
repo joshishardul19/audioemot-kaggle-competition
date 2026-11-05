@@ -183,19 +183,36 @@ Companion to [README.md](README.md). Each phase has a goal, the tasks, the conce
 
 **Goal:** understand how each model family behaves on these features.
 
-- [ ] Put feature scaling inside a pipeline, so the scaler is fitted only on the training folds.
-- [ ] Train and compare:
+- [x] Put feature scaling inside a pipeline, so the scaler is fitted only on the training folds.
+- [x] Train and compare:
   - logistic regression
   - k-NN
   - SVM (RBF kernel)
   - decision tree
   - random forest
-- [ ] Do light hyperparameter tuning, always inside the grouped cross-validation.
-- [ ] Make a **first Kaggle submission** with the best single model, and check that the file format is accepted.
+- [x] Do light hyperparameter tuning, always inside the grouped cross-validation.
+- [x] Make a **first Kaggle submission** with the best single model, and check that the file format is accepted.
 
 **Concepts:** bias vs variance, why scaling matters (for SVM and k-NN especially), and overfitting to the validation set.
 
 **Done when:** you have a comparison table of the models on macro F1 and one accepted submission.
+
+**Results** (notebook: [notebooks/05_classifiers.ipynb](notebooks/05_classifiers.ipynb); submission: [submissions/audiemo_phase5_svm_rbf.csv](submissions/audiemo_phase5_svm_rbf.csv)):
+
+| Model (tuned) | Best settings | Macro F1 | `fold_std` | RAVDESS | TESS |
+|---|---|---|---|---|---|
+| **SVM (RBF)** | `C=10`, `gamma=scale` | **0.858** | 0.016 | **0.538** | 0.995 |
+| Logistic regression | `C=0.1` | 0.836 | 0.020 | 0.500 | 0.981 |
+| Random forest | `max_features=sqrt`, `min_samples_leaf=1` | 0.832 | 0.022 | 0.441 | 0.997 |
+| k-NN | `n_neighbors=15`, `weights=distance` | 0.819 | 0.014 | 0.414 | 0.995 |
+| Decision tree | `max_depth=8`, `min_samples_leaf=1` | 0.738 | 0.012 | 0.306 | 0.921 |
+
+- **Best single model: SVM (RBF).** It beats the reference (0.824 overall, 0.489 RAVDESS) and has the highest RAVDESS score. Its lead over logistic regression is 0.022, about the size of `fold_std`, so it's a modest win rather than a decisive one.
+- **Scaling:** removing the scaler drops SVM from 0.854 to 0.234 and k-NN from 0.803 to 0.527, because both decide by distance. Random forest stays at 0.832, because trees compare one feature at a time.
+- **Bias vs variance:** at depth 2 the decision tree scores about 0.25 on both training and validation data (underfitting). Validation peaks near 0.74 at depth 8, while training keeps climbing to 1.0 by depth 16 (overfitting).
+- **Tuning added little:** only k-NN's gain (+0.016) exceeds its `fold_std` (0.014), and only just. SVM gained 0.004 and random forest gained nothing.
+- **Hardest emotions:** per-emotion F1 for the SVM runs from 0.818 (sad) to 0.888 (surprised). The largest single confusion is happy → fear (0.06).
+- **First Kaggle submission made** with the SVM, retrained on all 4,048 clips. The leaderboard score isn't recorded here yet.
 
 ---
 
