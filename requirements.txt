@@ -1,0 +1,23 @@
+# Core numerics and data handling
+numpy==2.5.4
+pandas==3.1.0
+scipy==1.18.1
+
+# Audio loading and feature extraction
+librosa==1.0.0
+soundfile==0.14.0
+
+# Classical ML and ensembles
+scikit-learn==1.9.1
+xgboost==3.4.1
+lightgbm==4.7.0
+
+# Plotting
+matplotlib==3.11.2
+
+# Notebooks in VS Code and progress bars
+ipykernel==7.4.0
+tqdm==4.70.1
+
+# Downloading competition data and datasets
+kaggle==2.2.5
