@@ -38,15 +38,7 @@ The best single model is an **SVM with an RBF kernel**, at **0.858 macro F1** in
 
 ## How it was built
 
-```mermaid
-flowchart LR
-    A["Raw audio<br/>RAVDESS + TESS"] --> B["Metadata<br/>one table of clips"]
-    B --> C["Exploration<br/>listen and measure"]
-    C --> D["Features<br/>256 per clip"]
-    D --> E["Grouped validation<br/>5 folds"]
-    E --> F["Five classifiers<br/>tuned and compared"]
-    F --> G["Kaggle submission"]
-```
+![Project pipeline: raw audio, metadata, exploration, features, validation, classifiers, then Kaggle submission](assets/pipeline.png)
 
 **Phase 0: Setup.** Created the environment and downloaded the data. Both training downloads contained a duplicate copy of the dataset, which checksums confirmed were identical, so only one copy is used.
 
@@ -99,3 +91,7 @@ Then run the notebooks in [`notebooks/`](notebooks/) in numerical order.
 
 - **RAVDESS:** Livingstone, S. R., & Russo, F. A. (2018). *The Ryerson Audio-Visual Database of Emotional Speech and Song.* PLoS ONE 13(5).
 - **TESS:** Dupuis, K., & Pichora-Fuller, M. K. (2010). *Toronto Emotional Speech Set.* University of Toronto.
+
+---
+
+<sub>AudiEmot because it has all the vowels :)</sub>
